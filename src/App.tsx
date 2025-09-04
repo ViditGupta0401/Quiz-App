@@ -2,6 +2,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeProvider } from "@/components/theme-provider";
 
 // API handling setup
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -10,6 +11,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import { Quiz } from "./components/Quiz";
+import { Layout } from "./components/layout/Layout";
 import { Results } from "./components/Results";
 import NotFound from "./pages/NotFound";
 import { DifficultySelection } from "./components/DifficultySelection";
@@ -20,23 +22,52 @@ const queryClient = new QueryClient();
 // Main app component with routing and providers
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
+    <ThemeProvider defaultTheme="dark">
+      <TooltipProvider>
       {/* Toast notifications for user feedback */}
       <Toaster />
       <Sonner />
       <BrowserRouter>
         <Routes>
           {/* Redirect root to quiz page */}
-          <Route path="/" element={<Navigate to="/quiz" replace />} />
-          {/* Quiz flow: difficulty selection -> quiz -> results */}
-          <Route path="/quiz" element={<DifficultySelection />} />
-          <Route path="/quiz/:difficulty" element={<Quiz />} />
-          <Route path="/results" element={<Results />} />
+          <Route
+            path="/"
+            element={
+              <Layout>
+                <Navigate to="/quiz" replace />
+              </Layout>
+            }
+          />
+          {/* Quiz flow: difficulty selection -> quiz */}
+          <Route
+            path="/quiz"
+            element={
+              <Layout>
+                <Index />
+              </Layout>
+            }
+          />
+          <Route
+            path="/quiz/:difficulty"
+            element={
+              <Layout>
+                <Quiz />
+              </Layout>
+            }
+          />
           {/* Catch any unknown routes */}
-          <Route path="*" element={<NotFound />} />
+          <Route
+            path="*"
+            element={
+              <Layout>
+                <NotFound />
+              </Layout>
+            }
+          />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

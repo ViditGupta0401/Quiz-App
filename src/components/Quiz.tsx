@@ -28,7 +28,7 @@ export interface UserAnswer {
 
 // Different states of quiz flow
 type QuizState = 'difficulty' | 'playing' | 'results';
-type Difficulty = 'easy' | 'medium' | 'hard';
+export type Difficulty = 'easy' | 'medium' | 'hard';
 
 // Time limit per question
 const TIMER_DURATION = 30; // seconds
@@ -58,30 +58,87 @@ export const Quiz: React.FC = () => {
 
   // Load high score from localStorage on mount
   useEffect(() => {
+    // Load high score
     const savedHighScore = localStorage.getItem('quiz-high-score');
     if (savedHighScore) {
       setHighScore(parseInt(savedHighScore, 10));
     }
-  }, []);
+
+    // Start quiz if difficulty is provided
+    if (urlDifficulty && (urlDifficulty === 'easy' || urlDifficulty === 'medium' || urlDifficulty === 'hard')) {
+      console.log('Starting quiz with difficulty from URL:', urlDifficulty);
+      setSelectedDifficulty(urlDifficulty as Difficulty);
+      fetchQuestions(urlDifficulty as Difficulty);
+    }
+  }, [urlDifficulty]);
+
+  // Enhanced fetch with retry mechanism and timeout
+  const fetchWithTimeout = async (url: string, timeout = 10000): Promise<Response> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+      const response = await fetch(url, { 
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        }
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Request timed out. Please check your connection and try again.');
+      }
+      throw error;
+    }
+  };
+
+  // Retry mechanism for API calls
+  const fetchWithRetry = async (url: string, maxRetries = 3): Promise<Response> => {
+    let lastError: Error;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetchWithTimeout(url);
+        if (response.ok) {
+          return response;
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown error');
+        
+        if (attempt < maxRetries) {
+          // Exponential backoff: wait 1s, 2s, 4s between retries
+          const delay = Math.pow(2, attempt - 1) * 1000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    throw lastError!;
+  };
 
   // Fetch questions from API based on difficulty
   const fetchQuestions = async (selectedDifficulty: Difficulty) => {
-    setLoading(true);
+    console.log('Fetching questions for difficulty:', selectedDifficulty);
     setError(null);
     
     try {
-      const response = await fetch(
+      const response = await fetchWithRetry(
         `https://opentdb.com/api.php?amount=10&difficulty=${selectedDifficulty}&type=multiple`
       );
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch questions');
-      }
       
       const data = await response.json();
       
       if (data.response_code !== 0) {
-        throw new Error('No questions available for this difficulty');
+        throw new Error('No questions available for this difficulty. Please try a different difficulty level.');
+      }
+      
+      if (!data.results || data.results.length === 0) {
+        throw new Error('No questions found. Please try again later.');
       }
       
       const decodedQuestions = data.results.map((q: any) => ({
@@ -102,7 +159,18 @@ export const Quiz: React.FC = () => {
       setQuizState('playing');
       setTimeRemaining(TIMER_DURATION);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load questions');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load questions';
+      setError(errorMessage);
+      
+      // Enhanced error logging for debugging
+      console.error('Quiz fetch error:', {
+        error: err,
+        difficulty: selectedDifficulty,
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        online: navigator.onLine
+      });
+      
       // Fallback to local questions if API fails
       loadFallbackQuestions();
     } finally {
@@ -182,7 +250,15 @@ export const Quiz: React.FC = () => {
       setUserAnswers(newUserAnswers);
       
       if (isCorrect) {
-        setScore(score + 1);
+        const newScore = score + 1;
+        setScore(newScore);
+        // Update high score immediately if the current score exceeds it
+        if (newScore > highScore) {
+          setHighScore(newScore);
+          localStorage.setItem('quiz-high-score', newScore.toString());
+          // Also update in global context
+          dispatch({ type: 'UPDATE_HIGH_SCORE', payload: newScore });
+        }
       }
       
       if (currentQuestionIndex < questions.length - 1) {
@@ -194,6 +270,8 @@ export const Quiz: React.FC = () => {
         if (finalScore > highScore) {
           setHighScore(finalScore);
           localStorage.setItem('quiz-high-score', finalScore.toString());
+          // Also update in global context
+          dispatch({ type: 'UPDATE_HIGH_SCORE', payload: finalScore });
         }
         setQuizState('results');
       }
@@ -212,8 +290,9 @@ export const Quiz: React.FC = () => {
 
   // Skip current question without answering
   const handleSkip = () => {
+    console.log('Skipping question:', currentQuestionIndex + 1);
+    dispatch({ type: 'SKIP_QUESTION' });
     setSelectedAnswer(null);
-    handleNext();
   };
 
   // Auto-submit when timer runs out
@@ -221,6 +300,50 @@ export const Quiz: React.FC = () => {
     setTimeRemaining(0);
     handleNext();
   };
+
+  // Keyboard navigation support
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (quizState !== 'playing' || questions.length === 0) return;
+      
+      const currentQuestion = questions[currentQuestionIndex];
+      if (!currentQuestion) return;
+      
+      const allAnswers = [currentQuestion.correct_answer, ...currentQuestion.incorrect_answers].sort();
+      
+      // Handle number keys for answer selection (1-4)
+      if (e.key >= '1' && e.key <= '4') {
+        const answerIndex = parseInt(e.key) - 1;
+        if (answerIndex < allAnswers.length) {
+          const answer = allAnswers[answerIndex];
+          handleAnswerSelect(answer);
+        }
+      }
+      
+      // Handle Enter key to proceed
+      if (e.key === 'Enter' && selectedAnswer) {
+        handleNext();
+      }
+      
+      // Handle Escape key to skip
+      if (e.key === 'Escape') {
+        handleSkip();
+      }
+      
+      // Handle arrow keys for navigation
+      if (e.key === 'ArrowLeft' && currentQuestionIndex > 0) {
+        handlePrevious();
+      }
+      if (e.key === 'ArrowRight' && currentQuestionIndex < questions.length - 1) {
+        if (selectedAnswer) {
+          handleNext();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [quizState, currentQuestionIndex, selectedAnswer, questions]);
 
   // Reset everything for a new game
   const handleRestart = () => {
@@ -234,9 +357,20 @@ export const Quiz: React.FC = () => {
     setQuizState('difficulty');
   };
 
-  const handleDifficultySelect = (difficulty: Difficulty) => {
+  const handleDifficultySelect = async (difficulty: Difficulty) => {
+    console.log('Starting quiz with difficulty:', difficulty);
+    if (loading) return; // Prevent multiple selections while loading
+    
+    setLoading(true);
     setSelectedDifficulty(difficulty);
-    fetchQuestions(difficulty);
+    
+    try {
+      await fetchQuestions(difficulty);
+    } catch (error) {
+      console.error('Error starting quiz:', error);
+      setError('Failed to start quiz. Please try again.');
+      setLoading(false);
+    }
   };
 
   if (quizState === 'difficulty') {
@@ -277,13 +411,21 @@ export const Quiz: React.FC = () => {
   const allAnswers = [currentQuestion.correct_answer, ...currentQuestion.incorrect_answers].sort();
 
   return (
-    <div className="min-h-screen bg-background py-8 px-4">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-background relative overflow-hidden py-8 px-4">
+      {/* Animated background patterns */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-background"></div>
+      <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-5"></div>
+      
+      <div className="max-w-4xl mx-auto relative">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gradient mb-2">Quiz Master</h1>
-          <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
-            <span>Score: {score}/{questions.length}</span>
-            <span>High Score: {highScore}</span>
+          <h1 className="text-5xl md:text-6xl font-bold text-gradient mb-6 animate-title">Quiz Forge</h1>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm">
+            <span className="px-4 py-2 rounded-full bg-primary/10 backdrop-blur-sm border border-primary/20 text-primary animate-score font-medium">
+              Score: {score}/{questions.length}
+            </span>
+            <span className="px-4 py-2 rounded-full bg-primary/10 backdrop-blur-sm border border-primary/20 text-primary animate-score font-medium">
+              High Score: {highScore}
+            </span>
           </div>
         </div>
 
@@ -293,7 +435,7 @@ export const Quiz: React.FC = () => {
         />
 
         <div className="quiz-card fade-in mb-6">
-          <div className="flex justify-between items-start mb-6">
+          <div className="flex justify-between items-center mb-6">
             <div className="text-sm text-muted-foreground">
               Question {currentQuestionIndex + 1} of {questions.length}
             </div>
@@ -303,6 +445,34 @@ export const Quiz: React.FC = () => {
               onTimeUp={handleTimeUp}
               setTimeRemaining={setTimeRemaining}
             />
+          </div>
+          
+          {/* Keyboard shortcuts info */}
+          <div className="mb-6 p-4 bg-gradient-to-r from-muted/10 to-muted/5 rounded-xl border border-border/30 backdrop-blur-sm">
+            <div className="text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-2 h-2 rounded-full bg-primary/60"></div>
+                <span className="font-medium">Keyboard shortcuts</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                <div className="flex items-center gap-1">
+                  <kbd className="px-2 py-1 bg-muted/30 rounded text-xs">1-4</kbd>
+                  <span>Select</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <kbd className="px-2 py-1 bg-muted/30 rounded text-xs">Enter</kbd>
+                  <span>Next</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <kbd className="px-2 py-1 bg-muted/30 rounded text-xs">Esc</kbd>
+                  <span>Skip</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <kbd className="px-2 py-1 bg-muted/30 rounded text-xs">←→</kbd>
+                  <span>Navigate</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <QuestionCard

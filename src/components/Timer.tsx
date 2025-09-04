@@ -44,21 +44,35 @@ export const Timer: React.FC<TimerProps> = ({
   };
 
   return (
-    <div className="flex items-center gap-3">
+    <div 
+      className="flex items-center gap-3" 
+      role="timer" 
+      aria-live={isLowTime ? "assertive" : "polite"}
+      aria-label={`Time remaining: ${timeRemaining} seconds`}
+    >
       {/* Timer Icon */}
       <div className={`flex items-center gap-2 ${getTimerColor()}`}>
         {isVeryLowTime ? (
-          <AlertTriangle className="w-5 h-5 animate-pulse" />
+          <AlertTriangle 
+            className="w-5 h-5 animate-pulse" 
+            aria-hidden="true"
+          />
         ) : (
-          <Clock className="w-5 h-5" />
+          <Clock 
+            className="w-5 h-5" 
+            aria-hidden="true"
+          />
         )}
-        <span className={`font-mono text-lg font-bold ${isVeryLowTime ? 'animate-pulse' : ''}`}>
+        <span 
+          className={`font-mono text-lg font-bold ${isVeryLowTime ? 'animate-pulse' : ''}`}
+          aria-label={`${timeRemaining} seconds remaining`}
+        >
           {timeRemaining}s
         </span>
       </div>
 
       {/* Circular Progress */}
-      <div className="relative w-12 h-12">
+      <div className="relative w-12 h-12" aria-hidden="true">
         <svg className="w-12 h-12 rotate-[-90deg]" viewBox="0 0 36 36">
           {/* Background circle */}
           <path
@@ -88,6 +102,12 @@ export const Timer: React.FC<TimerProps> = ({
         <div className={`absolute inset-0 flex items-center justify-center text-xs font-bold ${getTimerColor()}`}>
           {timeRemaining}
         </div>
+      </div>
+      
+      {/* Screen reader announcements */}
+      <div className="sr-only" aria-live="polite">
+        {isVeryLowTime && "Warning: Time is running out!"}
+        {timeRemaining === 0 && "Time's up!"}
       </div>
     </div>
   );

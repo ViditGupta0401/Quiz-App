@@ -33,6 +33,7 @@ type QuizAction =
   | { type: 'SET_ANSWER'; payload: { answer: string | null } }
   | { type: 'NEXT_QUESTION' }
   | { type: 'PREVIOUS_QUESTION' }
+  | { type: 'SKIP_QUESTION' }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_TIME'; payload: number }
@@ -78,7 +79,8 @@ const quizReducer = (state: QuizState, action: QuizAction): QuizState => {
         correctAnswer: state.questions[state.currentQuestionIndex].correct_answer,
         isCorrect: action.payload.answer === state.questions[state.currentQuestionIndex].correct_answer
       };
-      const newScore = updatedAnswers.filter(answer => answer.isCorrect).length;
+      // Only update score for completed questions (not skipped)
+      const newScore = updatedAnswers.filter(answer => answer.userAnswer !== null && answer.isCorrect).length;
       return {
         ...state,
         userAnswers: updatedAnswers,
@@ -94,6 +96,20 @@ const quizReducer = (state: QuizState, action: QuizAction): QuizState => {
       return {
         ...state,
         currentQuestionIndex: Math.max(state.currentQuestionIndex - 1, 0),
+        timeRemaining: 30
+      };
+    case 'SKIP_QUESTION':
+      const skippedAnswers = [...state.userAnswers];
+      skippedAnswers[state.currentQuestionIndex] = {
+        question: state.questions[state.currentQuestionIndex].question,
+        userAnswer: null,
+        correctAnswer: state.questions[state.currentQuestionIndex].correct_answer,
+        isCorrect: false
+      };
+      return {
+        ...state,
+        userAnswers: skippedAnswers,
+        currentQuestionIndex: Math.min(state.currentQuestionIndex + 1, state.questions.length - 1),
         timeRemaining: 30
       };
     case 'SET_LOADING':
