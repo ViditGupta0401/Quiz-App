@@ -1,0 +1,54 @@
+{
+  "questions": [
+    {
+      "question": "What is the capital of France?",
+      "correct_answer": "Paris",
+      "incorrect_answers": ["London", "Berlin", "Madrid"]
+    },
+    {
+      "question": "Which planet is known as the Red Planet?",
+      "correct_answer": "Mars",
+      "incorrect_answers": ["Venus", "Jupiter", "Saturn"]
+    },
+    {
+      "question": "Who painted the Mona Lisa?",
+      "correct_answer": "Leonardo da Vinci",
+      "incorrect_answers": ["Pablo Picasso", "Vincent van Gogh", "Michelangelo"]
+    },
+    {
+      "question": "What is the largest mammal in the world?",
+      "correct_answer": "Blue Whale",
+      "incorrect_answers": ["African Elephant", "Giraffe", "Hippopotamus"]
+    },
+    {
+      "question": "In which year did World War II end?",
+      "correct_answer": "1945",
+      "incorrect_answers": ["1944", "1946", "1943"]
+    },
+    {
+      "question": "What is the chemical symbol for gold?",
+      "correct_answer": "Au",
+      "incorrect_answers": ["Ag", "Fe", "Cu"]
+    },
+    {
+      "question": "Which programming language was created by James Gosling?",
+      "correct_answer": "Java",
+      "incorrect_answers": ["Python", "C++", "JavaScript"]
+    },
+    {
+      "question": "What is the largest ocean on Earth?",
+      "correct_answer": "Pacific Ocean",
+      "incorrect_answers": ["Atlantic Ocean", "Indian Ocean", "Arctic Ocean"]
+    },
+    {
+      "question": "Who wrote 'Romeo and Juliet'?",
+      "correct_answer": "William Shakespeare",
+      "incorrect_answers": ["Charles Dickens", "Jane Austen", "Mark Twain"]
+    },
+    {
+      "question": "What is the hardest natural substance on Earth?",
+      "correct_answer": "Diamond",
+      "incorrect_answers": ["Gold", "Iron", "Platinum"]
+    }
+  ]
+}
